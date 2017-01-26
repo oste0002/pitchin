@@ -17,9 +17,9 @@ typedef struct Dlist_List cli_list;
 
 
 typedef struct {
-  int l_sock;
-  int l_port;
-  int r_port;
+  int lstn_sock;
+  int lstn_port;
+  int reply_port;
   pthread_t cli_mgr_ID1;
   pthread_t cli_mgr_ID2;
   pthread_t cli_mgr_ID3;
@@ -27,6 +27,8 @@ typedef struct {
 
 
 typedef struct {
+  int cli_mgr_ID;
+  dlist_list *cli_mgr_list;
   dlist_list *cli_list;
 } cli_mgr_ctrl;
 

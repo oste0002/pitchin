@@ -12,10 +12,12 @@
 #include "pitch.h"
 #include "dlist/dlist.h"
 
+#include <time.h>
 
-int setup_con(int *fd_sock, int *port);
-void *cli_mgr_thread(void *arg);
 
+static int setup_con(int *fd_sock, int *port);
+static void *cli_mgr_thread(void *arg);
+static void cli_mgr_pthread_cleanup_cli_list(void *arg);
 
 
 
@@ -24,8 +26,8 @@ int main(int argc, char* argv[]) {
   int err;
   static top_ctrl ctrl = {0};
   cli_mgr_arg cli_mgr_arg1, cli_mgr_arg2, cli_mgr_arg3;
-  ctrl.l_port = PITCH_LISTEN_PORT;
-  ctrl.r_port = PITCH_REPLY_PORT;
+  ctrl.lstn_port = PITCH_LISTEN_PORT;
+  ctrl.reply_port = PITCH_REPLY_PORT;
 
   // Syntax check
   if (argc != 1) {
@@ -33,9 +35,9 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE); }
 
   // Setup listen connection
-  if ((err = setup_con(&ctrl.l_sock, &ctrl.l_port)) != 0) {
+  if ((err = setup_con(&ctrl.lstn_sock, &ctrl.lstn_port)) != 0) {
     fprintf(stderr,"Could not open listen connection\n");
-    if ((err < -2) && (close(ctrl.l_sock) != 0))
+    if ((err < -2) && (close(ctrl.lstn_sock) != 0))
       perror("close listen socket"); }
 
 
@@ -56,15 +58,36 @@ int main(int argc, char* argv[]) {
     perror("Create client manager thread #3");
 
 
-  if (close(ctrl.l_sock) != 0)
+  // TEST
+  struct timespec rqtp_3 = {.tv_sec = 3, .tv_nsec = 0};
+  nanosleep(&rqtp_3, NULL);
+  if ((errno = pthread_detach(ctrl.cli_mgr_ID1)) != 0)
+    perror("Detach client manager thread #1");
+  if ((errno = pthread_detach(ctrl.cli_mgr_ID2)) != 0)
+    perror("Detach client manager thread #2");
+  if ((errno = pthread_detach(ctrl.cli_mgr_ID3)) != 0)
+    perror("Detach client manager thread #3");
+  if ((errno = pthread_cancel(ctrl.cli_mgr_ID1)) != 0)
+    perror("Cancel client manager thread #1");
+  if ((errno = pthread_cancel(ctrl.cli_mgr_ID2)) != 0)
+    perror("Cancel client manager thread #2");
+  if ((errno = pthread_cancel(ctrl.cli_mgr_ID3)) != 0)
+    perror("Cancel client manager thread #3");
+
+  struct timespec rqtp_1 = {.tv_sec = 1, .tv_nsec = 0};
+  nanosleep(&rqtp_1, NULL);
+
+
+  if (close(ctrl.lstn_sock) != 0)
     perror("close listen socket");
 
   exit(EXIT_SUCCESS);
+  return 0;
 }
 
 
 
-int setup_con(int *sock, int *port) {
+static int setup_con(int *sock, int *port) {
   struct addrinfo hints;
   struct addrinfo *servinfo, *p;
   char port_char[5];
@@ -120,13 +143,48 @@ int setup_con(int *sock, int *port) {
 
 
 
+static void cli_mgr_pthread_cleanup_cli_list(void *arg) {
+  dlist_list *list = (dlist_list *)arg;
+  dlist_destroy(list);
+  printf("B\n");
+}
 
-
-void *cli_mgr_thread(void *arg) {
+static void *cli_mgr_thread(void *arg) {
   cli_mgr_arg *thr_arg = (cli_mgr_arg *) arg;
   static cli_mgr_ctrl ctrl = {0};
 
+  ctrl.cli_mgr_ID = thr_arg->cli_mgr_ID;
+  ctrl.cli_mgr_list = thr_arg->cli_mgr_list;
+  ctrl.cli_list = dlist_init(CLIENT_LIST_INIT_LINKS, CLIENT_LIST_MAX_LINKS,
+      sizeof(cli_dat));
+  pthread_cleanup_push(cli_mgr_pthread_cleanup_cli_list, ctrl.cli_list);
 
 
+
+
+  // TEST
+  struct timespec rqtp_1 = {.tv_sec = 1, .tv_nsec = 0};
+  while(1) {
+    nanosleep(&rqtp_1, NULL);
+    pthread_testcancel();
+    printf("A\n");
+  }
+
+
+
+  pthread_cleanup_pop(1);
   return NULL;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
